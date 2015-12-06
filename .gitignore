@@ -2,4 +2,5 @@
 env/
 *.pyc
 data/
+!data/data-preprocess.sh
 !data/test.txt
