@@ -20,9 +20,18 @@ def get_whois(domain):
         time.sleep(2)
         host = USE_WHOIS_CMD
         COUNT = 0
-    w = whois.whois(domain, host)
+    w = None
+    try:
+        w = whois.whois(domain, host)
+    except Exception as e:
+        logging.error(e)
+
+    if w is None:
+        COUNT += 1
+        logging.error("FAIL Retrieve whois of domain '%s' fail." % domain)
+        return None
     #: 没有邮箱直接判定为查询失败
-    if w.emails is not None:
+    elif w.emails is not None:
         logging.debug("SUCCESS Retrieve whois of domain '%s'." % domain)
         return w
     else:
