@@ -64,7 +64,7 @@ def save_whois(domain, whois_obj):
             # Create a new record
             sql = "INSERT INTO `whois` (`domain`, `whois`, `last_modified`) VALUES (%s, %s, %s)"
             cursor.execute(sql, (original_domain_str,
-                                 json.dumps(json.loads(str(whois_obj))),
+                                 json.dumps(json.loads(str(whois_obj)), ensure_ascii=False, separators=(',', ':')),
                                  time.strftime('%Y-%m-%d %H:%M:%S')))
         # connection is not autocommit by default. So you must commit to save your changes.
         DB_CONN.commit()
