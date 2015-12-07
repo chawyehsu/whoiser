@@ -26,3 +26,4 @@ else
   sort base.txt base.txt append.txt tmp/no-ranknum-top-1m.txt | uniq -u >> append.txt
 fi
 
+echo "Done."

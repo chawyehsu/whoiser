@@ -2,8 +2,9 @@
 import Queue
 import threading
 import time
-from config import DATA_FILE, WHOISER_THREAD, SAVER_THREAD
+from config import DATA_FILE, WHOISER_THREAD, SAVER_THREAD, DB_CONN, LOG_LEVEL
 import jobs
+import coloredlogs
 import logging
 
 #: 工作队列
@@ -12,6 +13,8 @@ domains = Queue.Queue()
 whois_quene = Queue.Queue()
 #: 失败队列
 fail_quene = Queue.Queue()
+
+EXIT_FLAG = threading.Event()
 
 
 class WorkManager(object):
@@ -27,23 +30,23 @@ class WorkManager(object):
     # 初始化工作队列
     @staticmethod
     def __init_work_queue():
-        logging.debug("Loading domains data...")
+        logging.info("Loading domains data...")
         _start = time.time()
         with open(DATA_FILE, "r") as data:
             for line in data:
                 domains.put(line.strip('\n'))
-        logging.debug("Finish data loading, work queue length: %s. (time cost: %s)" %
+        logging.info("Finish data loading, work queue length: %s. (time cost: %s)" %
                       (domains.qsize(), (time.time() - _start)))
 
     # 初始化 whoiser 线程池
     def __init_whoiser_thread_pool(self):
-        logging.debug("Initializing whoiser thread pool...")
+        logging.info("Initializing whoiser thread pool...")
         for i in range(WHOISER_THREAD):
             self.whoisers.append(Whoiser(domains))
 
     # 初始化 saver 线程池
     def __init_saver_thread_pool(self):
-        logging.debug("Initializing saver thread pool...")
+        logging.info("Initializing saver thread pool...")
         for i in range(SAVER_THREAD):
             self.savers.append(Saver(whois_quene))
 
@@ -62,18 +65,23 @@ class Whoiser(threading.Thread):
     def __init__(self, work_queue):
         threading.Thread.__init__(self)
         self.work_queue = work_queue
+        self.setDaemon(True)
         self.start()
 
     def run(self):
-        while True:
-            domain = self.work_queue.get()
-            if domain is not None:
+        while not EXIT_FLAG.is_set():
+            try:
+                domain = domains.get()
                 whois_resp = jobs.get_whois(domain)
                 if whois_resp is None:
                     fail_quene.put(domain)
+                    #: 获取失败重新加入查询队列
+                    # domains.put(domain)
                 else:
                     whois_quene.put([domain, whois_resp])
-            self.work_queue.task_done()
+            except domains.empty():
+                continue
+            domains.task_done()
 
 
 class Saver(threading.Thread):
@@ -81,21 +89,37 @@ class Saver(threading.Thread):
     def __init__(self, work_queue):
         threading.Thread.__init__(self)
         self.work_queue = work_queue
+        self.setDaemon(True)
         self.start()
 
     def run(self):
-        while True:
-            whois_obj = self.work_queue.get()
-            jobs.save_whois(whois_obj[0], whois_obj[1].text)
-            self.work_queue.task_done()
+        while not EXIT_FLAG.is_set():
+            try:
+                whois_obj = whois_quene.get()
+                jobs.save_whois(whois_obj[0], whois_obj[1])
+            except whois_quene.empty():
+                continue
+            whois_quene.task_done()
 
 
 def setup_logging():
-    logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s %(filename)s:%(lineno)d] %(message)s')
+    coloredlogs.DEFAULT_LOG_FORMAT = '[%(levelname)-8s %(filename)s:%(lineno)d] %(message)s'
+    coloredlogs.install(level=LOG_LEVEL)
+    # logging.basicConfig(level=LOG_LEVEL, format='[%(levelname)s %(filename)s:%(lineno)d] %(message)s')
 
 if __name__ == '__main__':
+    EXIT_FLAG.clear()
+
     setup_logging()
     start = time.time()
     work_manager = WorkManager()
-    work_manager.wait_all_complete()
-    logging.info("Time cost: %s." % (time.time() - start))
+    domains.join()
+    EXIT_FLAG.set()
+
+    # work_manager.wait_all_complete()
+    DB_CONN.close()
+    logging.debug("Finish whois querying, time cost: %ss." % (time.time() - start))
+    logging.info("Saving fail querying domains")
+    with open('data/fail.txt', 'a') as fail_file:
+        while not fail_quene.empty():
+            fail_file.write("%s%s" % (fail_quene.get(), '\n'))
