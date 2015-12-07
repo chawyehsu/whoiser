@@ -70,6 +70,9 @@ class Whoiser(threading.Thread):
 
     def run(self):
         while not EXIT_FLAG.is_set():
+            if not self.isAlive():
+                self.setDaemon(True)
+                self.start()
             try:
                 domain = domains.get()
                 whois_resp = jobs.get_whois(domain)
@@ -94,6 +97,9 @@ class Saver(threading.Thread):
 
     def run(self):
         while not EXIT_FLAG.is_set():
+            if not self.isAlive():
+                self.setDaemon(True)
+                self.start()
             try:
                 whois_obj = whois_quene.get()
                 jobs.save_whois(whois_obj[0], whois_obj[1])

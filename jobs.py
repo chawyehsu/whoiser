@@ -24,7 +24,7 @@ def get_whois(domain):
     try:
         w = whois.whois(domain, host)
     except Exception as e:
-        logging.error(e)
+        logging.error("PyWhois Exception: %s" % e)
 
     if w is None:
         COUNT += 1
@@ -46,14 +46,17 @@ def save_whois(domain, whois_obj):
     #: 反向拆解域名，构造 whois 文件存放目录
     domain = domain.split('.')
     domain.reverse()
-    path = os.path.join(WHOIS_DIR, *domain)
-    if not os.path.exists(path):
-        os.makedirs(path)
+    try:
+        path = os.path.join(WHOIS_DIR, *domain)
+        if not os.path.exists(path):
+            os.makedirs(path)
 
-    # 文件形式保存 whois 原始信息
-    absolute_path = os.path.join(path, WHOIS_FILENAME)
-    with open(absolute_path, 'w') as whois_file:
-        whois_file.write(whois_obj.text)
+        # 文件形式保存 whois 原始信息
+        absolute_path = os.path.join(path, WHOIS_FILENAME)
+        with open(absolute_path, 'w') as whois_file:
+            whois_file.write(whois_obj.text)
+    except Exception as e:
+        logging.error("Saving to file Exception: %s" % e)
 
     # 然后以 Json 形式保存到数据库
     try:
@@ -72,5 +75,5 @@ def save_whois(domain, whois_obj):
             cursor.execute(sql, (original_domain_str,))
             result = cursor.fetchone()
             logging.debug("Saved whois json into mysql: %s" % result)
-    finally:
-        pass
+    except Exception as e:
+        logging.error("PyMySQL Exception: %s" % e)
