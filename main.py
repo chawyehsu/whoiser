@@ -2,7 +2,7 @@
 import Queue
 import threading
 import time
-from config import DATA_FILE, WHOISER_THREAD, SAVER_THREAD, DB_CONN, LOG_LEVEL
+from config import DATA_FILE, WHOISER_THREAD, SAVER_THREAD, DB_CONN, LOG_LEVEL, FAIL_SAVER_THREAD
 import jobs
 import coloredlogs
 import logging
@@ -26,6 +26,9 @@ class WorkManager(object):
         #: Savers 线程池
         self.savers = []
         self.__init_saver_thread_pool()
+        #: FailSavers 线程池
+        self.fail_savers = []
+        self.__init_fail_saver_thread_pool()
 
     # 初始化工作队列
     @staticmethod
@@ -50,12 +53,22 @@ class WorkManager(object):
         for i in range(SAVER_THREAD):
             self.savers.append(Saver(whois_quene))
 
+    # 初始化 fail_saver 线程池
+    def __init_fail_saver_thread_pool(self):
+        logging.info("Initializing fail_saver thread pool...")
+        for i in range(FAIL_SAVER_THREAD):
+            self.fail_savers.append(FailSaver(fail_quene))
+
     def wait_all_complete(self):
         for t in self.whoisers:
             if t.isAlive():
                 t.join()
 
         for t in self.savers:
+            if t.isAlive():
+                t.join()
+
+        for t in self.fail_savers:
             if t.isAlive():
                 t.join()
 
@@ -108,6 +121,29 @@ class Saver(threading.Thread):
             whois_quene.task_done()
 
 
+class FailSaver(threading.Thread):
+    """失败域名保存线程"""
+    def __init__(self, work_queue):
+        threading.Thread.__init__(self)
+        self.work_queue = work_queue
+        self.setDaemon(True)
+        self.start()
+
+    def run(self):
+        while not EXIT_FLAG.is_set():
+            if not self.isAlive():
+                self.setDaemon(True)
+                self.start()
+            try:
+                fail_domain = fail_quene.get()
+                logging.info("Saving fail querying domain '%s' to fail.txt." % fail_domain)
+                with open('data/fail.txt', 'a') as fail_file:
+                    fail_file.write("%s%s" % (fail_domain, '\n'))
+            except fail_quene.empty():
+                continue
+            fail_quene.task_done()
+
+
 def setup_logging():
     coloredlogs.DEFAULT_LOG_FORMAT = '[%(levelname)-8s %(filename)s:%(lineno)d] %(message)s'
     coloredlogs.install(level=LOG_LEVEL)
@@ -125,7 +161,3 @@ if __name__ == '__main__':
     # work_manager.wait_all_complete()
     DB_CONN.close()
     logging.debug("Finish whois querying, time cost: %ss." % (time.time() - start))
-    logging.info("Saving fail querying domains")
-    with open('data/fail.txt', 'a') as fail_file:
-        while not fail_quene.empty():
-            fail_file.write("%s%s" % (fail_quene.get(), '\n'))

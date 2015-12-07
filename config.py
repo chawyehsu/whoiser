@@ -13,8 +13,9 @@ WHOIS_DIR = os.path.join(DATA_DIR, 'whois')
 DATA_FILE = os.path.join(DATA_DIR, 'test.txt')
 WHOIS_FILENAME = 'whois.txt'
 
-WHOISER_THREAD = 8
+WHOISER_THREAD = 7
 SAVER_THREAD = 4
+FAIL_SAVER_THREAD = 1
 
 USE_WHOIS_CMD = True
 
