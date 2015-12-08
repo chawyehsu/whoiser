@@ -68,7 +68,10 @@ def save_whois(domain, whois_obj):
                                  time.strftime('%Y-%m-%d %H:%M:%S')))
         # connection is not autocommit by default. So you must commit to save your changes.
         DB_CONN.commit()
+    except Exception as e:
+        logging.error("PyMySQL Exception: %s" % e)
 
+    try:
         with DB_CONN.cursor() as cursor:
             # Read a single record
             sql = "SELECT `id`, `domain` FROM `whois` WHERE `domain`=%s"
