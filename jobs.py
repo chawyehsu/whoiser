@@ -68,8 +68,11 @@ def save_whois(domain, whois_obj):
                                  time.strftime('%Y-%m-%d %H:%M:%S')))
         # connection is not autocommit by default. So you must commit to save your changes.
         DB_CONN.commit()
+    except AttributeError as ae:
+        logging.error("DB connection timeout. Exception: %s" % ae.args)
+        DB_CONN.connect()
     except Exception as e:
-        logging.error("PyMySQL Exception: %s" % e)
+        logging.error("Save into SQL error. Exception: %s" % e.args)
 
     try:
         with DB_CONN.cursor() as cursor:
@@ -78,5 +81,8 @@ def save_whois(domain, whois_obj):
             cursor.execute(sql, (original_domain_str,))
             result = cursor.fetchone()
             logging.debug("Saved whois json into mysql: %s" % result)
+    except AttributeError as ae:
+        logging.error("DB connection timeout. Exception: %s" % ae.args)
+        DB_CONN.connect()
     except Exception as e:
-        logging.error("PyMySQL Exception: %s" % e)
+        logging.error("Query SQL error. Exception: %s" % e.args)
